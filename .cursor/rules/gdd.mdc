@@ -1,0 +1,181 @@
+---
+description: Game design document
+alwaysApply: false
+---
+🎮 Game Design Document — Barely Moved Co.
+1. High Concept
+
+A chaotic co-op moving simulator where players work for a two-person moving company. The goal? Move furniture, boxes, and fragile items out of ridiculous houses without destroying everything—or each other.
+It’s “Overcooked” meets “Moving Out” with heavier physics, slapstick mishaps, and light progression.
+
+Tagline:
+
+“Move fast. Break nothing. Argue constantly.”
+
+2. Core Pillars
+
+Co-op Chaos:
+Every item is a disaster waiting to happen. Players must communicate—or yell—to move it safely.
+
+Physical Comedy:
+Physics-driven gameplay where mistakes are funny, not frustrating.
+
+Progression Through Upgrades:
+Earn cash to buy gear that makes future jobs easier or safer.
+
+Replayable Jobs:
+Each mission can be replayed for better time, money, or zero-damage bonuses.
+
+3. Gameplay Overview
+Core Loop
+
+Accept a moving job from the company board.
+
+Enter the level (house, office, etc.).
+
+Move all required items to the truck within the time limit.
+
+Get paid based on time, condition, and completion.
+
+Spend earnings on upgrades and cosmetic items.
+
+Moment-to-Moment Gameplay
+
+Grab/Carry Items:
+
+Small items (1 person) → can be carried freely.
+
+Large items (2 person) → both players must grab; movement syncs to physics constraints.
+
+Damage System:
+
+Each item has a value.
+
+Collisions with walls, drops, or throws reduce its value.
+
+Completely broken = zero value (and funny ragdoll effect).
+
+Time Pressure:
+
+A timer counts down. Finishing before time ends grants bonuses.
+
+Optional Chaos Events:
+
+Dog steals socks.
+
+Floor breaks under heavy objects.
+
+Moving truck slowly rolls downhill if left open.
+
+4. Controls (Third-Person)
+Action	Input (Default)
+Move	WASD / Left Stick
+Look	Mouse / Right Stick
+Grab / Drop	E / RT
+Jump	Space / A
+Throw (if carrying)	Left Click / LT
+Interact (doors, switches)	F / X
+Sprint	Shift / B
+5. Progression & Upgrades
+Category	Examples
+Equipment	Fragile Protection Case, Stronger Gloves (faster carry), Trolley/Cart, Rope Tie
+Cosmetics	Hats, Uniforms, Truck Paint Jobs
+Company Level	Unlock harder jobs, bigger houses, new regions
+Vehicle Upgrades	Faster loading time, better brakes
+6. Art & Visual Style
+
+Camera: Third-person, slightly behind and above player.
+
+Style: Stylized semi-realistic or simple toon-shaded (low cost, readable chaos).
+
+Moodboard Keywords: Moving Out, Human Fall Flat, Totally Reliable Delivery Service, simple soft lighting.
+
+Animations: Emphasize clumsiness and exaggerated motion.
+
+7. Technical Details
+Aspect	Notes
+Engine	Unity (URP recommended for performance)
+Physics	Rigidbody-based grab + joint constraints
+Networking Mirror (free, open source)
+
+Host-client model works perfectly.
+
+Steamworks integration possible with a small wrapper.
+
+Simple to sync player transforms, object states, and physics events.
+
+Input System	Unity’s New Input System for easy controller support
+Save System	Simple JSON or ScriptableObject-based persistent company data
+8. Level Design
+
+Job Types: House → Office → Luxury Villa → Warehouse
+
+Difficulty Curve:
+
+Early: Simple layouts, light items.
+
+Mid: Narrow hallways, obstacles.
+
+Late: Multi-floor chaos (elevators, pets, hazards).
+
+Bonus Objectives:
+
+“No broken items”
+
+“Finish under 2 minutes”
+
+“Collect secret item”
+
+9. Target Audience
+
+Party game fans, couch co-op players.
+
+Streamers looking for chaos content.
+
+Casual players who enjoy physics-driven humor.
+
+10. Monetization (if needed later)
+
+Base game (paid).
+
+Cosmetic DLC packs (skins, vehicles, furniture themes).
+
+Optional co-op challenge modes as free updates.
+
+11. MVP (Minimum Viable Prototype)
+
+Goal: Deliver a few furniture items into a truck without breaking them.
+
+Required Systems:
+
+Player movement (third person).
+
+Grab/release physics objects.
+
+Breakable item system (health/value).
+
+Delivery truck with collision trigger.
+
+Basic scoring UI.
+
+12. Lobby Flow - Network
+
+Player A creates a lobby (becomes host).
+
+Player B/C/D receive Steam invite → join Player A’s lobby.
+
+Host handles physics authority:
+
+All rigidbody/item movement is simulated on host.
+
+Clients send input (movement, grab/release actions).
+
+Sync important states:
+
+Player positions & rotations
+
+Grabbed item states (who is grabbing, item transform)
+
+Item damage/condition changes
+
+Delivery truck interactions
