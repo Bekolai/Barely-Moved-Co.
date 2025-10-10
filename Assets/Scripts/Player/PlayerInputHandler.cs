@@ -53,7 +53,24 @@ namespace BarelyMoved.Player
         #region Input System
         private void InitializeInputActions()
         {
+            if (m_PlayerInput == null)
+            {
+                Debug.LogError("[PlayerInputHandler] PlayerInput component is null!");
+                return;
+            }
+
+            if (m_PlayerInput.actions == null)
+            {
+                Debug.LogError("[PlayerInputHandler] InputActionAsset is not assigned to PlayerInput!");
+                return;
+            }
+
             var actionMap = m_PlayerInput.currentActionMap;
+            if (actionMap == null)
+            {
+                Debug.LogError("[PlayerInputHandler] Current action map is null!");
+                return;
+            }
 
             m_MoveAction = actionMap.FindAction("Move");
             m_LookAction = actionMap.FindAction("Look");
@@ -61,6 +78,14 @@ namespace BarelyMoved.Player
             m_SprintAction = actionMap.FindAction("Sprint");
             m_GrabAction = actionMap.FindAction("Grab");
             m_ThrowAction = actionMap.FindAction("Throw");
+
+            // Check if required actions were found
+            if (m_MoveAction == null) Debug.LogWarning("[PlayerInputHandler] Move action not found!");
+            if (m_LookAction == null) Debug.LogWarning("[PlayerInputHandler] Look action not found!");
+            if (m_JumpAction == null) Debug.LogWarning("[PlayerInputHandler] Jump action not found!");
+            if (m_SprintAction == null) Debug.LogWarning("[PlayerInputHandler] Sprint action not found!");
+            if (m_GrabAction == null) Debug.LogWarning("[PlayerInputHandler] Grab action not found!");
+            if (m_ThrowAction == null) Debug.LogWarning("[PlayerInputHandler] Throw action not found!");
 
             // Subscribe to input events
             if (m_JumpAction != null)

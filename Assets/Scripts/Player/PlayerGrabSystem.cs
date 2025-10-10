@@ -149,9 +149,34 @@ namespace BarelyMoved.Player
         #endregion
 
         #region Input Handling
+        private float m_LastInputTime = 0f;
+        private const float c_InputBufferTime = 0.1f; // Minimum time between input processing
+
         private void HandleGrabInput()
         {
-            // Grab/Drop
+            // Prevent rapid input processing that might cause conflicts
+            if (Time.time - m_LastInputTime < c_InputBufferTime) return;
+            m_LastInputTime = Time.time;
+
+            // Process inputs in priority order to avoid conflicts
+            // Priority: Throw > Drop > Grab
+
+            // Handle throw input first - consume immediately if pressed
+            if (m_InputHandler.IsThrowPressed)
+            {
+                m_InputHandler.ConsumeThrowInput();
+
+                if (IsHoldingItem)
+                {
+                    // Throw item (only if holding one)
+                    ThrowItem();
+                    return; // Don't process other inputs this frame
+                }
+                // If not holding item, throw input is consumed and ignored
+                // This prevents throw from being "queued" until an item is grabbed
+            }
+
+            // Grab/Drop (medium priority)
             if (m_InputHandler.IsGrabPressed)
             {
                 m_InputHandler.ConsumeGrabInput();
@@ -166,13 +191,6 @@ namespace BarelyMoved.Player
                     // Grab item
                     GrabItem(m_NearbyItem);
                 }
-            }
-
-            // Throw
-            if (m_InputHandler.IsThrowPressed && IsHoldingItem)
-            {
-                m_InputHandler.ConsumeThrowInput();
-                ThrowItem();
             }
         }
         #endregion

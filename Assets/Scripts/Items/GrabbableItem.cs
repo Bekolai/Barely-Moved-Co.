@@ -48,6 +48,12 @@ namespace BarelyMoved.Items
         public bool IsGrabbed => m_IsGrabbed;
         public bool IsBroken => m_CurrentValue <= m_ItemData.MinValue;
         public virtual bool CanBeGrabbed => !m_IsGrabbed && !IsBroken;
+
+        private float m_LastReleaseTime;
+        private bool m_WasThrown; // Track if item was thrown vs dropped
+        private const float c_ReleaseGracePeriod = 0.5f; // Seconds of immunity after being released
+        private const float c_MinDamageVelocity = 5f; // Minimum velocity to cause damage
+        private const float c_ThrowDamageMultiplier = 2f; // Extra damage for thrown items
         #endregion
 
         #region Unity Lifecycle
@@ -55,20 +61,42 @@ namespace BarelyMoved.Items
         {
             m_Rigidbody = GetComponent<Rigidbody>();
             m_Colliders = GetComponentsInChildren<Collider>();
-            
+           
+       
             // Set initial value
             if (m_ItemData != null)
             {
                 m_CurrentValue = m_ItemData.BaseValue;
             }
         }
+        /// <summary>
+        /// Mark item as recently released (not thrown)
+        /// </summary>
+        [Server]
+        public void MarkAsReleased()
+        {
+            m_LastReleaseTime = Time.time;
+            m_WasThrown = false;
+        }
 
+        /// <summary>
+        /// Mark item as thrown
+        /// </summary>
+        [Server]
+        public void MarkAsThrown()
+        {
+            m_LastReleaseTime = Time.time;
+            m_WasThrown = true;
+        }
+            
         protected virtual void Start()
         {
             // Server sets up physics
             if (isServer)
             {
                 SetupPhysics();
+                // Mark as released initially (for spawn grace period)
+                MarkAsReleased();
             }
         }
 
@@ -122,11 +150,14 @@ namespace BarelyMoved.Items
         {
             m_IsGrabbed = false;
             m_GrabbedByPlayerID = 0;
-            
+
             // Re-enable physics
             m_Rigidbody.isKinematic = false;
             m_Rigidbody.linearVelocity = _releaseVelocity;
-            
+
+            // Mark as released (not thrown)
+            MarkAsReleased();
+
             Debug.Log($"[GrabbableItem] {gameObject.name} released");
         }
 
@@ -137,10 +168,13 @@ namespace BarelyMoved.Items
         public virtual void Throw(Vector3 _throwVelocity)
         {
             Release(_throwVelocity);
-            
+
+            // Mark as thrown for damage calculation
+            MarkAsThrown();
+
             // Add extra force for throw
             m_Rigidbody.AddForce(_throwVelocity, ForceMode.Impulse);
-            
+
             Debug.Log($"[GrabbableItem] {gameObject.name} thrown with force {_throwVelocity.magnitude}");
         }
         #endregion
@@ -151,12 +185,27 @@ namespace BarelyMoved.Items
             if (m_ItemData == null) return;
 
             float impactVelocity = _collision.relativeVelocity.magnitude;
+
+            // Don't take damage during release grace period (for gentle drops)
+            // BUT only if item was NOT thrown - thrown items can take damage immediately
+            if (!m_WasThrown && Time.time - m_LastReleaseTime < c_ReleaseGracePeriod) return;
+
+            // Don't take damage for low-velocity impacts (gentle collisions)
+            if (impactVelocity < c_MinDamageVelocity) return;
+
+            // Calculate base damage
             float damage = m_ItemData.CalculateDamage(impactVelocity);
+
+            // Apply extra damage if item was thrown
+            if (m_WasThrown)
+            {
+                damage *= c_ThrowDamageMultiplier;
+            }
 
             if (damage > 0f)
             {
                 ApplyDamage(damage);
-                
+
                 // Optional: Spawn visual/audio feedback
                 OnDamageReceived(damage, _collision.GetContact(0).point);
             }

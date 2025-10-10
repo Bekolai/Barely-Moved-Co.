@@ -37,11 +37,15 @@ This is a co-op moving simulator built with **Unity 6**, **Mirror Networking**, 
 
 **Network Manager Setup:**
 1. Create empty GameObject: `NetworkManager`
-2. Add component: `BarelyMovedNetworkManager`
-3. Add component: `SteamLobbyManager`
-4. Assign Player Prefab (see below)
-5. Set Max Players: 4
-6. Create spawn points and assign to array
+2. Add component: `NetworkManager` (built-in Unity component)
+3. Add component: `BarelyMovedNetworkManager`
+4. Add component: `SteamLobbyManager`
+5. **Add Transport:** Add `TelepathyTransport` component (from Mirror)
+   - Port: 7777 (default)
+   - Max Message Size: 16 KB (default)
+6. Assign Player Prefab (see below)
+7. Set Max Players: 4
+8. Create spawn points and assign to array
 
 **Steam Manager:**
 1. Create empty GameObject: `SteamManager`
@@ -50,9 +54,17 @@ This is a co-op moving simulator built with **Unity 6**, **Mirror Networking**, 
 
 **Camera Setup:**
 1. Create empty GameObject: `CameraManager`
-2. Add `CinemachineVirtualCamera` as child
+2. Add `CinemachineCamera` as child (from Cinemachine package)
 3. Add component: `CameraManager` script
-4. Set camera distance and settings
+4. Configure camera settings in inspector:
+   - Camera Distance: 5.0
+   - Camera Height: 2.0
+   - Zoom Speed: 5.0
+5. Add Cinemachine components to the CinemachineCamera:
+   - `Cinemachine Third Person Follow` (main camera component for following)
+   - `Cinemachine Orbital Follow` (for orbital camera movement)
+   - `Cinemachine Input Axis Controller` (for mouse input handling)
+   - `Cinemachine Collision Impulse Source` (optional, for camera shake)
 
 **Job Management:**
 1. Create empty GameObject: `JobManager`
@@ -218,7 +230,9 @@ Item_Couch
 
 **Single Player:**
 - [ ] Player spawns correctly
-- [ ] Camera follows player
+- [ ] Camera follows player with smooth orbital controls
+- [ ] Mouse look works (right mouse button + drag)
+- [ ] Camera zoom works (mouse wheel)
 - [ ] Movement works (WASD, controller)
 - [ ] Can grab single-player items (E)
 - [ ] Can throw items (Left Click)
@@ -242,6 +256,14 @@ Item_Couch
 ### "Mirror NetworkManager not found"
 → Install Mirror package (see above)
 
+### "There was no active transport when calling NetworkServer.Listen"
+→ Add TelepathyTransport component to NetworkManager GameObject
+→ Ensure transport is properly configured with port settings
+
+### "NullReferenceException in NetworkServer.AddTransportHandlers"
+→ Check that NetworkManager has both NetworkManager and TelepathyTransport components
+→ Restart Unity after adding transport components
+
 ### "SteamAPI_Init() failed"
 → Ensure Steam is running, check steam_appid.txt exists
 
@@ -257,6 +279,17 @@ Item_Couch
 ### Input not working
 → Ensure PlayerInput component has InputSystem_Actions assigned
 → Check input action map is set to "Player"
+→ Verify PlayerInput component is properly configured in inspector
+
+### Items taking damage on spawn
+→ Items have 2-second spawn grace period (automatic)
+→ If still occurring, check for collisions during spawn process
+
+### Camera not rotating or zooming
+→ Ensure CinemachineCamera has "Cinemachine Third Person Follow", "Cinemachine Orbital Follow", and "Cinemachine Input Axis Controller" components
+→ Check that CameraManager script is properly configured
+→ Verify Look action is bound in Input System (should be mouse movement)
+→ Check camera settings in inspector (Camera Distance, Zoom Speed)
 
 ---
 
@@ -283,7 +316,7 @@ Item_Couch
 - `GameHUD` - UI controller
 
 ### Camera
-- `CameraManager` - Cinemachine integration
+- `CameraManager` - AAA-style third-person camera with input-based controls
 
 ---
 

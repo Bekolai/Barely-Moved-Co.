@@ -11,6 +11,7 @@ namespace BarelyMoved.GameManagement
     /// Tracks time, required items, scoring, etc.
     /// Server authoritative
     /// </summary>
+    [RequireComponent(typeof(NetworkIdentity))]
     public class JobManager : NetworkBehaviour
     {
         #region Singleton
@@ -58,6 +59,13 @@ namespace BarelyMoved.GameManagement
             }
 
             Instance = this;
+
+            // Configure NetworkIdentity for server-only authority
+            NetworkIdentity networkIdentity = GetComponent<NetworkIdentity>();
+            if (networkIdentity != null)
+            {
+                networkIdentity.serverOnly = true; // This object only exists on server
+            }
         }
 
         private void Update()

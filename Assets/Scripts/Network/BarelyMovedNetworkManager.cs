@@ -130,10 +130,12 @@ namespace BarelyMoved.Network
                 return;
             }
 
+            // Set max connections before starting host
             maxConnections = m_MaxPlayers;
-            NetworkServer.Listen(maxConnections);
+
+            // Use NetworkManager's StartHost() which handles transport setup properly
             StartHost();
-            
+
             Debug.Log("[BarelyMovedNetworkManager] Started hosting with max players: " + m_MaxPlayers);
         }
 
