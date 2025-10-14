@@ -4,8 +4,9 @@ using Mirror;
 namespace BarelyMoved.Player
 {
     /// <summary>
-    /// Third-person networked player controller
+    /// First-person networked player controller
     /// Client sends input to server, server simulates movement and physics
+    /// Player faces the direction they're looking (controlled by camera)
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     [RequireComponent(typeof(PlayerInputHandler))]
@@ -20,7 +21,6 @@ namespace BarelyMoved.Player
         [SerializeField, Range(1f, 10f)] private float m_WalkSpeed = 3.5f;
         [SerializeField, Range(1f, 15f)] private float m_SprintSpeed = 6f;
         [SerializeField, Range(1f, 10f)] private float m_JumpHeight = 1.5f;
-        [SerializeField, Range(1f, 20f)] private float m_RotationSpeed = 10f;
 
         [Header("Ground Check")]
         [SerializeField] private Transform m_GroundCheck;
@@ -45,7 +45,7 @@ namespace BarelyMoved.Player
         #endregion
 
         #region Properties
-        public Transform CameraTarget => m_CameraTarget;
+
         public bool IsGrounded => m_IsGrounded;
         public Vector3 Velocity => m_Velocity;
         #endregion
@@ -60,7 +60,7 @@ namespace BarelyMoved.Player
         public override void OnStartLocalPlayer()
         {
             base.OnStartLocalPlayer();
-            
+
             // Get main camera
             if (UnityEngine.Camera.main != null)
             {
@@ -68,10 +68,9 @@ namespace BarelyMoved.Player
             }
 
             // Notify camera system to follow this player
-            if (m_CameraTarget != null)
-            {
-                BarelyMoved.Camera.CameraManager.Instance?.SetFollowTarget(m_CameraTarget);
-            }
+
+
+            // Camera is now first-person only by default
         }
 
         private void Update()
@@ -109,11 +108,10 @@ namespace BarelyMoved.Player
             // Determine speed
             float targetSpeed = isSprinting ? m_SprintSpeed : m_WalkSpeed;
             
-            // Move character
+            // Move character (player rotation is now controlled by camera)
             if (moveDirection.magnitude > 0.1f)
             {
                 m_CharacterController.Move(moveDirection * targetSpeed * Time.deltaTime);
-                RotateTowardsMovement(moveDirection);
             }
 
             // Handle jumping
@@ -161,14 +159,6 @@ namespace BarelyMoved.Player
 
             // Calculate desired move direction
             return (forward * _input.y + right * _input.x).normalized;
-        }
-
-        private void RotateTowardsMovement(Vector3 _direction)
-        {
-            if (_direction.magnitude < 0.1f) return;
-
-            Quaternion targetRotation = Quaternion.LookRotation(_direction);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, m_RotationSpeed * Time.deltaTime);
         }
 
         private void CheckGroundStatus()

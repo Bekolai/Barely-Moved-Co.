@@ -53,7 +53,7 @@ namespace BarelyMoved.Network
             #if !DISABLESTEAMWORKS
             if (!SteamManager.Initialized)
             {
-                Debug.LogError("[BarelyMovedNetworkManager] SteamManager not initialized! Ensure SteamManager is in the scene.");
+                Debug.LogWarning("[BarelyMovedNetworkManager] SteamManager not initialized. This is normal for testing without Steam. Game will continue in offline/test mode.");
             }
             #endif
         }
@@ -124,6 +124,15 @@ namespace BarelyMoved.Network
         /// </summary>
         public void StartHosting()
         {
+            StartHosting(false);
+        }
+
+        /// <summary>
+        /// Start hosting a game with optional Steam bypass
+        /// </summary>
+        /// <param name="_bypassSteam">If true, starts hosting without Steam integration</param>
+        public void StartHosting(bool _bypassSteam)
+        {
             if (NetworkServer.active || NetworkClient.active)
             {
                 Debug.LogWarning("[BarelyMovedNetworkManager] Already connected!");
@@ -136,7 +145,7 @@ namespace BarelyMoved.Network
             // Use NetworkManager's StartHost() which handles transport setup properly
             StartHost();
 
-            Debug.Log("[BarelyMovedNetworkManager] Started hosting with max players: " + m_MaxPlayers);
+            Debug.Log($"[BarelyMovedNetworkManager] Started hosting with max players: {m_MaxPlayers}, Steam bypass: {_bypassSteam}");
         }
 
         /// <summary>

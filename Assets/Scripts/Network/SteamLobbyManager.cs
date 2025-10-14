@@ -16,6 +16,18 @@ namespace BarelyMoved.Network
         private const string c_LobbyTypeValue = "BarelyMovedCo";
         #endregion
 
+        #region Build Configuration
+        /// <summary>
+        /// Check if we're in a build that should disable Steam (for testing)
+        /// </summary>
+        private bool ShouldDisableSteam()
+        {
+            // Always disable Steam in builds for testing
+            // In builds, Steam typically isn't available, so we run in offline mode
+            return true;
+        }
+        #endregion
+
         #region Singleton
         public static SteamLobbyManager Instance { get; private set; }
         #endregion
@@ -64,7 +76,7 @@ namespace BarelyMoved.Network
             #if !DISABLESTEAMWORKS
             if (!SteamManager.Initialized)
             {
-                Debug.LogError("[SteamLobbyManager] SteamManager not initialized!");
+                Debug.LogWarning("[SteamLobbyManager] SteamManager not initialized. This is normal for testing without Steam. Game will continue in offline/test mode.");
                 return;
             }
 
@@ -98,10 +110,18 @@ namespace BarelyMoved.Network
         /// </summary>
         public void CreateLobby()
         {
+            // Check if we should disable Steam for testing
+            if (ShouldDisableSteam())
+            {
+                Debug.Log("[SteamLobbyManager] Steam disabled for testing - starting direct host mode");
+                BarelyMovedNetworkManager.Instance?.StartHosting(true); // Bypass Steam
+                return;
+            }
+
             #if !DISABLESTEAMWORKS
             if (!SteamManager.Initialized)
             {
-                Debug.LogError("[SteamLobbyManager] Cannot create lobby - Steam not initialized!");
+                Debug.LogWarning("[SteamLobbyManager] Cannot create lobby - Steam not initialized. This is normal for testing without Steam.");
                 return;
             }
 
@@ -114,7 +134,7 @@ namespace BarelyMoved.Network
             Debug.Log("[SteamLobbyManager] Creating lobby...");
             SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypeFriendsOnly, m_MaxLobbyMembers);
             #else
-            Debug.LogError("[SteamLobbyManager] Steamworks is disabled!");
+            Debug.LogWarning("[SteamLobbyManager] Steamworks is disabled. This is normal for testing without Steam.");
             #endif
         }
 
@@ -126,14 +146,14 @@ namespace BarelyMoved.Network
             #if !DISABLESTEAMWORKS
             if (!SteamManager.Initialized)
             {
-                Debug.LogError("[SteamLobbyManager] Cannot join lobby - Steam not initialized!");
+                Debug.LogWarning("[SteamLobbyManager] Cannot join lobby - Steam not initialized. This is normal for testing without Steam.");
                 return;
             }
 
             Debug.Log($"[SteamLobbyManager] Joining lobby {_lobbyID}...");
             SteamMatchmaking.JoinLobby(_lobbyID);
             #else
-            Debug.LogError("[SteamLobbyManager] Steamworks is disabled!");
+            Debug.LogWarning("[SteamLobbyManager] Steamworks is disabled. This is normal for testing without Steam.");
             #endif
         }
 
@@ -195,7 +215,7 @@ namespace BarelyMoved.Network
         {
             if (_callback.m_eResult != EResult.k_EResultOK)
             {
-                Debug.LogError($"[SteamLobbyManager] Failed to create lobby! Result: {_callback.m_eResult}");
+                Debug.LogWarning($"[SteamLobbyManager] Failed to create lobby! Result: {_callback.m_eResult}. This is normal for testing without Steam.");
                 return;
             }
 
@@ -207,8 +227,13 @@ namespace BarelyMoved.Network
             
             Debug.Log($"[SteamLobbyManager] Lobby created successfully: {m_CurrentLobbyID}");
             
-            // Start hosting the game
-            BarelyMovedNetworkManager.Instance?.StartHosting();
+            // Start hosting the game (bypass Steam if in test mode)
+            bool bypassSteam = false;
+            #if UNITY_EDITOR
+            // In editor, we can bypass Steam for testing
+            bypassSteam = true;
+            #endif
+            BarelyMovedNetworkManager.Instance?.StartHosting(bypassSteam);
             
             OnLobbyCreated?.Invoke(m_CurrentLobbyID);
         }
