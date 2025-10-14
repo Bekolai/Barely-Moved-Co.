@@ -3,12 +3,21 @@ using Mirror;
 
 namespace BarelyMoved.Items
 {
+	public interface ICarryController
+	{
+		void StartCarry(Vector3 _position, Quaternion _rotation);
+		void UpdateTarget(Vector3 _position, Quaternion _rotation);
+		void StopCarry(Vector3 _releaseVelocity);
+		void ForceStopCarry();
+	}
+
     /// <summary>
     /// Base class for all grabbable items in the game
     /// Handles network synchronization, damage tracking, and physics
     /// Server is authoritative for all physics simulation
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
+    [RequireComponent(typeof(CarryPhysicsController))]
     public class GrabbableItem : NetworkBehaviour
     {
         #region Enums
@@ -39,6 +48,13 @@ namespace BarelyMoved.Items
         [SyncVar] protected bool m_IsGrabbed;
         [SyncVar] protected uint m_GrabbedByPlayerID; // NetworkIdentity netId
         #endregion
+
+		#region Carry/Damage Tuning
+		[Header("Carry & Damage Tuning")]
+		[SerializeField, Range(0f, 1f)] private float m_DropOnImpactFraction = 0.5f; // drop if single-hit damage >= 50% of remaining value window
+		[SerializeField] private float m_CarriedDamageMultiplier = 1f; // damage multiplier while carried
+		[SerializeField] private float m_RecoilImpulseScale = 3f; // impulse applied to item on collision while carried
+		#endregion
 
         #region Properties
         public ItemData Data => m_ItemData;
@@ -100,12 +116,10 @@ namespace BarelyMoved.Items
             }
         }
 
-        protected virtual void OnCollisionEnter(Collision _collision)
+		protected virtual void OnCollisionEnter(Collision _collision)
         {
             // Only server processes collisions
             if (!isServer) return;
-            if (m_IsGrabbed) return; // Don't take damage while being carried
-            
             ProcessCollisionDamage(_collision);
         }
         #endregion
@@ -124,8 +138,8 @@ namespace BarelyMoved.Items
         /// <summary>
         /// Called when a player grabs this item (Server only)
         /// </summary>
-        [Server]
-        public virtual bool TryGrab(uint _playerNetID)
+		[Server]
+		public virtual bool TryGrab(uint _playerNetID)
         {
             if (!CanBeGrabbed)
             {
@@ -134,10 +148,11 @@ namespace BarelyMoved.Items
 
             m_IsGrabbed = true;
             m_GrabbedByPlayerID = _playerNetID;
-            
-            // Disable physics while grabbed
-            m_Rigidbody.isKinematic = true;
-            
+			// Keep physics active while grabbed (Skyrim/REPO feel)
+			m_Rigidbody.isKinematic = false;
+			m_Rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+			m_Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+			
             Debug.Log($"[GrabbableItem] {gameObject.name} grabbed by player {_playerNetID}");
             return true;
         }
@@ -145,20 +160,23 @@ namespace BarelyMoved.Items
         /// <summary>
         /// Called when a player releases this item (Server only)
         /// </summary>
-        [Server]
-        public virtual void Release(Vector3 _releaseVelocity)
+		[Server]
+		public virtual void Release(Vector3 _releaseVelocity)
         {
             m_IsGrabbed = false;
             m_GrabbedByPlayerID = 0;
 
-            // Re-enable physics
-            m_Rigidbody.isKinematic = false;
+			// Ensure physics is enabled
+			m_Rigidbody.isKinematic = false;
             m_Rigidbody.linearVelocity = _releaseVelocity;
 
             // Mark as released (not thrown)
             MarkAsReleased();
 
             Debug.Log($"[GrabbableItem] {gameObject.name} released");
+
+			// Notify clients to clear carry state
+			RpcOnReleased();
         }
 
         /// <summary>
@@ -167,7 +185,13 @@ namespace BarelyMoved.Items
         [Server]
         public virtual void Throw(Vector3 _throwVelocity)
         {
-            Release(_throwVelocity);
+			// Ensure any carry joint is disabled before throwing
+			var controller = GetComponent<ICarryController>();
+			if (controller != null)
+			{
+				controller.ForceStopCarry();
+			}
+			Release(_throwVelocity);
 
             // Mark as thrown for damage calculation
             MarkAsThrown();
@@ -180,7 +204,7 @@ namespace BarelyMoved.Items
         #endregion
 
         #region Damage System
-        protected virtual void ProcessCollisionDamage(Collision _collision)
+		protected virtual void ProcessCollisionDamage(Collision _collision)
         {
             if (m_ItemData == null) return;
 
@@ -193,8 +217,12 @@ namespace BarelyMoved.Items
             // Don't take damage for low-velocity impacts (gentle collisions)
             if (impactVelocity < c_MinDamageVelocity) return;
 
-            // Calculate base damage
-            float damage = m_ItemData.CalculateDamage(impactVelocity);
+			// Calculate base damage
+			float damage = m_ItemData.CalculateDamage(impactVelocity);
+			if (m_IsGrabbed)
+			{
+				damage *= m_CarriedDamageMultiplier;
+			}
 
             // Apply extra damage if item was thrown
             if (m_WasThrown)
@@ -202,14 +230,46 @@ namespace BarelyMoved.Items
                 damage *= c_ThrowDamageMultiplier;
             }
 
-            if (damage > 0f)
+			if (damage > 0f)
             {
                 ApplyDamage(damage);
 
                 // Optional: Spawn visual/audio feedback
                 OnDamageReceived(damage, _collision.GetContact(0).point);
+
+				// Apply recoil impulse while carried
+				if (m_IsGrabbed)
+				{
+					var contact = _collision.GetContact(0);
+					Vector3 recoil = -contact.normal * m_RecoilImpulseScale * Mathf.Clamp(impactVelocity, 0f, 20f);
+					m_Rigidbody.AddForceAtPosition(recoil, contact.point, ForceMode.Impulse);
+				}
             }
+
+			// Forced drop on large single-hit damage while carried or any time
+			float remainingWindow = Mathf.Max(0.0001f, (m_CurrentValue - m_ItemData.MinValue));
+			if (damage >= m_DropOnImpactFraction * remainingWindow || IsBroken)
+			{
+				// Fully drop on server (disable carry + release with current velocity)
+				ForceDrop(m_Rigidbody.linearVelocity);
+			}
         }
+
+		#region Carry Control
+		/// <summary>
+		/// Server-side forced drop helper (called by external systems)
+		/// </summary>
+		[Server]
+		public void ForceDrop(Vector3 _releaseVelocity)
+		{
+			var controller = GetComponent<ICarryController>();
+			if (controller != null)
+			{
+				controller.ForceStopCarry();
+			}
+			Release(_releaseVelocity);
+		}
+		#endregion
 
         [Server]
         public void ApplyDamage(float _damage)
@@ -242,6 +302,12 @@ namespace BarelyMoved.Items
         {
             // Client-side broken state (VFX, SFX, etc.)
         }
+
+		[ClientRpc]
+		protected void RpcOnReleased()
+		{
+			// Hook for clients to react to release (clears local carry on holders)
+		}
         #endregion
 
         #region Network Synchronization

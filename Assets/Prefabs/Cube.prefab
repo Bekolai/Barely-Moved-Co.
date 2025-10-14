@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 5328807859545372335}
   - component: {fileID: 4896169126088516167}
   - component: {fileID: 4921912610220573913}
+  - component: {fileID: 6912279950407132193}
   m_Layer: 6
   m_Name: Cube
   m_TagString: Untagged
@@ -71,7 +72,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: ecfa71f4cd1908047a825371ef5607bd, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -139,9 +140,9 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 1
   m_IsKinematic: 0
-  m_Interpolate: 0
+  m_Interpolate: 1
   m_Constraints: 0
-  m_CollisionDetection: 0
+  m_CollisionDetection: 2
 --- !u!114 &5328807859545372335
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -212,5 +213,35 @@ MonoBehaviour:
   m_Size: 0
   m_GrabPoints: []
   m_VisualRoot: {fileID: 0}
+  m_DropOnImpactFraction: 0.5
+  m_CarriedDamageMultiplier: 1
+  m_RecoilImpulseScale: 3
   m_HoldOffset: {x: 0, y: 1, z: 0.5}
   m_HoldRotation: {x: 0, y: 0, z: 0}
+--- !u!114 &6912279950407132193
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4805103193730964255}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 617f8ae0ee25bbf429d2bf3b42978055, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BarelyMoved.Items.CarryPhysicsController
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  m_AnchorName: CarryAnchor
+  m_MaxMoveSpeed: 10
+  m_MaxAngularSpeedDeg: 180
+  m_TargetSmoothing: 0.4
+  m_LinearSpring: 400
+  m_LinearDamper: 40
+  m_AngularSpring: 200
+  m_AngularDamper: 25
+  m_CarriedDrag: 0.2
+  m_CarriedAngularDrag: 0.2
+  m_SolverPositionIterations: 12
+  m_SolverVelocityIterations: 4

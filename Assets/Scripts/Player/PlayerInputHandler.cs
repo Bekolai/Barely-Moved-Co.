@@ -29,6 +29,8 @@ namespace BarelyMoved.Player
         public bool IsGrabPressed { get; private set; }
         public bool IsThrowPressed { get; private set; }
         public bool IsInteractPressed { get; private set; }
+        public bool IsAdjustHeld { get; private set; } // RMB held
+        public float ScrollDelta { get; private set; } // Mouse scroll Y per frame
         #endregion
 
         #region Unity Lifecycle
@@ -111,6 +113,19 @@ namespace BarelyMoved.Player
             MoveInput = m_MoveAction?.ReadValue<Vector2>() ?? Vector2.zero;
             LookInput = m_LookAction?.ReadValue<Vector2>() ?? Vector2.zero;
             IsSprintHeld = m_SprintAction?.IsPressed() ?? false;
+
+            // Direct mouse access for RMB + scroll (new input system)
+            if (UnityEngine.InputSystem.Mouse.current != null)
+            {
+                IsAdjustHeld = UnityEngine.InputSystem.Mouse.current.rightButton.isPressed;
+                var scroll = UnityEngine.InputSystem.Mouse.current.scroll.ReadValue();
+                ScrollDelta = scroll.y;
+            }
+            else
+            {
+                IsAdjustHeld = false;
+                ScrollDelta = 0f;
+            }
         }
 
         private void OnJumpPerformed(InputAction.CallbackContext _context)

@@ -49,8 +49,26 @@ namespace BarelyMoved.Items
             // Only server simulates movement
             if (!isServer) return;
             
-            // If both players are grabbing, item is held in place by grab system
-            // Movement is handled by averaging player positions
+            // If both players are grabbing, drive the carry anchor toward midpoint
+            if (HasBothPlayers)
+            {
+                var frontObj = NetworkServer.spawned.TryGetValue(m_FrontPlayerID, out var frontIdentity) ? frontIdentity.gameObject : null;
+                var backObj  = NetworkServer.spawned.TryGetValue(m_BackPlayerID, out var backIdentity)  ? backIdentity.gameObject  : null;
+                if (frontObj != null && backObj != null)
+                {
+                    Vector3 frontPos = frontObj.transform.position;
+                    Vector3 backPos  = backObj.transform.position;
+                    Vector3 centerPos = (frontPos + backPos) * 0.5f;
+                    Vector3 dir = (frontPos - backPos);
+                    if (dir.sqrMagnitude < 0.0001f) dir = transform.forward;
+                    Quaternion rot = Quaternion.LookRotation(dir.normalized, Vector3.up);
+
+                    ICarryController controller = null;
+                    var mbs = GetComponents<MonoBehaviour>();
+                    for (int i = 0; i < mbs.Length; i++) { if (mbs[i] is ICarryController c) { controller = c; break; } }
+                    if (controller != null) { controller.UpdateTarget(centerPos, rot); }
+                }
+            }
         }
         #endregion
 

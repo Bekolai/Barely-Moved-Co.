@@ -21,6 +21,10 @@ namespace BarelyMoved.Player
         [SerializeField] private Transform m_HoldPosition;
         [SerializeField] private float m_HoldDistance = 1.5f;
         [SerializeField] private float m_ThrowForce = 10f;
+		[SerializeField] private float m_MinHoldDistance = 0.6f;
+		[SerializeField] private float m_MaxHoldDistance = 3.0f;
+		[SerializeField] private float m_VerticalAdjustSpeed = 0.01f; // meters per mouse Y unit
+		[SerializeField] private float m_ScrollAdjustSpeed = 0.1f; // meters per scroll step
 
         [Header("Visual Feedback")]
         [SerializeField] private Color m_HighlightColor = Color.yellow;
@@ -32,6 +36,7 @@ namespace BarelyMoved.Player
         
         private GrabbableItem m_CurrentlyHeldItem;
         private GrabbableItem m_NearbyItem;
+		private Dictionary<Collider, int> m_ItemColliderOriginalLayers = new Dictionary<Collider, int>();
         
         private Renderer m_HighlightedRenderer;
         private Color m_OriginalColor;
@@ -52,13 +57,14 @@ namespace BarelyMoved.Player
                 m_GrabOrigin = transform;
         }
 
-        private void Update()
+		private void Update()
         {
             if (!isLocalPlayer) return;
 
             DetectNearbyItems();
-            HandleGrabInput();
-            UpdateHeldItemPosition();
+			HandleGrabInput();
+			UpdateCarryTargetPose();
+			CheckForcedDropState();
         }
         #endregion
 
@@ -201,7 +207,7 @@ namespace BarelyMoved.Player
             if (_item == null) return;
 
             // Check item type
-            if (_item is SinglePlayerItem)
+			if (_item is SinglePlayerItem)
             {
                 CmdGrabSinglePlayerItem(_item.netId);
             }
@@ -216,30 +222,50 @@ namespace BarelyMoved.Player
             if (m_CurrentlyHeldItem == null) return;
 
             Vector3 dropVelocity = m_PlayerController.Velocity;
-            CmdDropItem(m_CurrentlyHeldItem.netId, dropVelocity);
+			CmdDropItem(m_CurrentlyHeldItem.netId, dropVelocity);
+
+			// Restore collision with player locally (client-side immediate)
+			RestorePlayerItemCollisions();
         }
 
         private void ThrowItem()
         {
             if (m_CurrentlyHeldItem == null) return;
 
-            Vector3 throwVelocity = m_GrabOrigin.forward * m_ThrowForce + m_PlayerController.Velocity;
-            CmdThrowItem(m_CurrentlyHeldItem.netId, throwVelocity);
+			Vector3 throwVelocity = m_GrabOrigin.forward * m_ThrowForce + m_PlayerController.Velocity;
+			CmdThrowItem(m_CurrentlyHeldItem.netId, throwVelocity);
+
+			// Locally clear collisions/layer now
+			RestorePlayerItemCollisions();
+			SetCarriedItemLayer(false);
         }
 
-        private void UpdateHeldItemPosition()
-        {
-            if (!IsHoldingItem) return;
-            if (m_CurrentlyHeldItem == null) return;
+		private float m_CurrentVerticalOffset = 0f;
+		private void UpdateCarryTargetPose()
+		{
+			if (!IsHoldingItem) return;
+			if (m_CurrentlyHeldItem == null) return;
 
-            // Calculate hold position
-            Vector3 targetPosition = m_HoldPosition != null 
-                ? m_HoldPosition.position 
-                : m_GrabOrigin.position + m_GrabOrigin.forward * m_HoldDistance;
+			Vector3 basePosition = (m_HoldPosition != null
+				? m_HoldPosition.position
+				: m_GrabOrigin.position) + m_GrabOrigin.forward * m_HoldDistance;
+			Quaternion targetRotation = m_GrabOrigin.rotation;
 
-            // Send to server to update
-            CmdUpdateHeldItemPosition(m_CurrentlyHeldItem.netId, targetPosition, m_GrabOrigin.rotation);
-        }
+			// Adjustments: RMB for vertical offset using mouse Y (LookInput.y), scroll for hold distance
+			if (m_InputHandler.IsAdjustHeld)
+			{
+				m_CurrentVerticalOffset += -m_InputHandler.LookInput.y * m_VerticalAdjustSpeed; // invert for natural feel
+				m_CurrentVerticalOffset = Mathf.Clamp(m_CurrentVerticalOffset, -0.8f, 0.8f);
+			}
+			if (Mathf.Abs(m_InputHandler.ScrollDelta) > 0.01f)
+			{
+				m_HoldDistance = Mathf.Clamp(m_HoldDistance + m_InputHandler.ScrollDelta * m_ScrollAdjustSpeed, m_MinHoldDistance, m_MaxHoldDistance);
+			}
+
+			Vector3 targetPosition = basePosition + Vector3.up * m_CurrentVerticalOffset;
+
+			CmdUpdateCarryTarget(m_CurrentlyHeldItem.netId, targetPosition, targetRotation);
+		}
         #endregion
 
         #region Network Commands
@@ -254,7 +280,16 @@ namespace BarelyMoved.Player
 
             if (item.TryGrab(netId))
             {
-                RpcOnItemGrabbed(_itemNetId);
+				// Start carry on server via controller
+				Vector3 targetPosition = m_HoldPosition != null
+					? m_HoldPosition.position
+					: m_GrabOrigin.position + m_GrabOrigin.forward * m_HoldDistance;
+				Quaternion targetRotation = m_GrabOrigin.rotation;
+                ICarryController controller = null;
+                var mbs = itemIdentity.GetComponents<MonoBehaviour>();
+                for (int i = 0; i < mbs.Length; i++) { if (mbs[i] is ICarryController c) { controller = c; break; } }
+                if (controller != null) { controller.StartCarry(targetPosition, targetRotation); }
+				RpcOnItemGrabbed(_itemNetId);
             }
         }
 
@@ -285,11 +320,15 @@ namespace BarelyMoved.Player
             // Check if dual-player item
             if (item is DualPlayerItem dualItem)
             {
-                dualItem.ReleasePlayer(netId);
+				dualItem.ReleasePlayer(netId);
             }
             else
             {
-                item.Release(_velocity);
+				ICarryController controller = null;
+				var mbs = itemIdentity.GetComponents<MonoBehaviour>();
+				for (int i = 0; i < mbs.Length; i++) { if (mbs[i] is ICarryController c) { controller = c; break; } }
+				if (controller != null) { controller.StopCarry(_velocity); }
+				else { item.Release(_velocity); }
             }
 
             RpcOnItemDropped();
@@ -301,24 +340,54 @@ namespace BarelyMoved.Player
             NetworkIdentity itemIdentity = NetworkServer.spawned[_itemNetId];
             if (itemIdentity == null) return;
 
-            GrabbableItem item = itemIdentity.GetComponent<GrabbableItem>();
+			GrabbableItem item = itemIdentity.GetComponent<GrabbableItem>();
             if (item == null) return;
 
-            item.Throw(_throwVelocity);
+			// Ensure carry is disabled before throw
+			ICarryController controller = null;
+			var mbs = itemIdentity.GetComponents<MonoBehaviour>();
+			for (int i = 0; i < mbs.Length; i++) { if (mbs[i] is ICarryController c) { controller = c; break; } }
+			if (controller != null) { controller.ForceStopCarry(); }
+
+			item.Throw(_throwVelocity);
             RpcOnItemDropped();
         }
 
-        [Command]
-        private void CmdUpdateHeldItemPosition(uint _itemNetId, Vector3 _position, Quaternion _rotation)
-        {
-            NetworkIdentity itemIdentity = NetworkServer.spawned[_itemNetId];
-            if (itemIdentity == null) return;
+		[Command]
+		private void CmdStartCarry(uint _itemNetId, Vector3 _position, Quaternion _rotation)
+		{
+			NetworkIdentity itemIdentity = NetworkServer.spawned[_itemNetId];
+			if (itemIdentity == null) return;
+            ICarryController controller = null;
+            var mbs = itemIdentity.GetComponents<MonoBehaviour>();
+            for (int i = 0; i < mbs.Length; i++) { if (mbs[i] is ICarryController c) { controller = c; break; } }
+            if (controller == null) return;
+            controller.StartCarry(_position, _rotation);
+		}
 
-            GrabbableItem item = itemIdentity.GetComponent<GrabbableItem>();
-            if (item == null) return;
+		[Command]
+		private void CmdUpdateCarryTarget(uint _itemNetId, Vector3 _position, Quaternion _rotation)
+		{
+			NetworkIdentity itemIdentity = NetworkServer.spawned[_itemNetId];
+			if (itemIdentity == null) return;
+            ICarryController controller = null;
+            var mbs = itemIdentity.GetComponents<MonoBehaviour>();
+            for (int i = 0; i < mbs.Length; i++) { if (mbs[i] is ICarryController c) { controller = c; break; } }
+            if (controller == null) return;
+            controller.UpdateTarget(_position, _rotation);
+		}
 
-            item.UpdatePosition(_position, _rotation);
-        }
+		[Command]
+		private void CmdStopCarry(uint _itemNetId, Vector3 _releaseVelocity)
+		{
+			NetworkIdentity itemIdentity = NetworkServer.spawned[_itemNetId];
+			if (itemIdentity == null) return;
+            ICarryController controller = null;
+            var mbs = itemIdentity.GetComponents<MonoBehaviour>();
+            for (int i = 0; i < mbs.Length; i++) { if (mbs[i] is ICarryController c) { controller = c; break; } }
+            if (controller == null) return;
+            controller.StopCarry(_releaseVelocity);
+		}
         #endregion
 
         #region Network Callbacks
@@ -330,17 +399,104 @@ namespace BarelyMoved.Player
             NetworkIdentity itemIdentity = NetworkClient.spawned[_itemNetId];
             if (itemIdentity == null) return;
 
-            m_CurrentlyHeldItem = itemIdentity.GetComponent<GrabbableItem>();
+			m_CurrentlyHeldItem = itemIdentity.GetComponent<GrabbableItem>();
             ClearHighlight();
+
+			// Ignore collisions between player and held item locally
+			IgnorePlayerItemCollisions();
+
+			// Move item colliders to CarriedItem layer if available to avoid CC blocking
+			SetCarriedItemLayer(true);
         }
 
         [ClientRpc]
-        private void RpcOnItemDropped()
+		private void RpcOnItemDropped()
         {
             if (!isLocalPlayer) return;
 
-            m_CurrentlyHeldItem = null;
+			// Restore before clearing reference
+			RestorePlayerItemCollisions();
+			SetCarriedItemLayer(false);
+			m_CurrentlyHeldItem = null;
+			m_InputHandler.ConsumeGrabInput();
         }
+
+		private void CheckForcedDropState()
+		{
+			if (!IsHoldingItem) return;
+			if (m_CurrentlyHeldItem == null) return;
+			if (!m_CurrentlyHeldItem.IsGrabbed)
+			{
+				// Item was dropped/broken server-side; clear local carry state
+				RestorePlayerItemCollisions();
+				SetCarriedItemLayer(false);
+				m_CurrentlyHeldItem = null;
+			}
+		}
+
+		private void IgnorePlayerItemCollisions()
+		{
+			if (m_CurrentlyHeldItem == null) return;
+			var itemColliders = m_CurrentlyHeldItem.GetComponentsInChildren<Collider>();
+			var playerColliders = GetComponentsInChildren<Collider>();
+			for (int i = 0; i < playerColliders.Length; i++)
+			{
+				for (int j = 0; j < itemColliders.Length; j++)
+				{
+					if (playerColliders[i] != null && itemColliders[j] != null)
+					{
+						Physics.IgnoreCollision(playerColliders[i], itemColliders[j], true);
+					}
+				}
+			}
+		}
+
+		private void RestorePlayerItemCollisions()
+		{
+			if (m_CurrentlyHeldItem == null) return;
+			var itemColliders = m_CurrentlyHeldItem.GetComponentsInChildren<Collider>();
+			var playerColliders = GetComponentsInChildren<Collider>();
+			for (int i = 0; i < playerColliders.Length; i++)
+			{
+				for (int j = 0; j < itemColliders.Length; j++)
+				{
+					if (playerColliders[i] != null && itemColliders[j] != null)
+					{
+						Physics.IgnoreCollision(playerColliders[i], itemColliders[j], false);
+					}
+				}
+			}
+		}
+
+		private void SetCarriedItemLayer(bool _enable)
+		{
+			if (m_CurrentlyHeldItem == null) return;
+			int carriedLayer = LayerMask.NameToLayer("CarriedItem");
+			if (carriedLayer == -1) return; // Layer not defined, skip
+			var itemColliders = m_CurrentlyHeldItem.GetComponentsInChildren<Collider>(true);
+			if (_enable)
+			{
+				m_ItemColliderOriginalLayers.Clear();
+				for (int i = 0; i < itemColliders.Length; i++)
+				{
+					var col = itemColliders[i];
+					if (col == null) continue;
+					m_ItemColliderOriginalLayers[col] = col.gameObject.layer;
+					col.gameObject.layer = carriedLayer;
+				}
+			}
+			else
+			{
+				foreach (var kv in m_ItemColliderOriginalLayers)
+				{
+					if (kv.Key != null)
+					{
+						kv.Key.gameObject.layer = kv.Value;
+					}
+				}
+				m_ItemColliderOriginalLayers.Clear();
+			}
+		}
         #endregion
 
         #if UNITY_EDITOR
