@@ -41,14 +41,12 @@ namespace BarelyMoved.Items
         #endregion
 
         #region Protected Fields
-        protected Rigidbody m_Rigidbody;
-        protected Collider[] m_Colliders;
-		private Vector3 m_LastHitPoint;
-		private Vector3 m_LastHitNormal;
-		private bool m_ProcessedBreak;
-		private static System.Type s_ShatterSpawnerType;
-		private static System.Reflection.MethodInfo s_ShatterSpawnMethod;
-        #endregion
+	protected Rigidbody m_Rigidbody;
+	protected Collider[] m_Colliders;
+	private Vector3 m_LastHitPoint;
+	private Vector3 m_LastHitNormal;
+	private bool m_ProcessedBreak;
+	#endregion
 
         #region SyncVars
         [SyncVar] protected float m_CurrentValue;
@@ -63,14 +61,14 @@ namespace BarelyMoved.Items
 		[SerializeField] private float m_RecoilImpulseScale = 3f; // impulse applied to item on collision while carried
 		#endregion
 
-		#region Break VFX
-		[Header("Break VFX")]
-		[SerializeField] private int m_ShatterShards = 8;
-		[SerializeField] private float m_ShatterSpeed = 4f;
-		[SerializeField] private float m_ShatterLifetime = 1.0f;
-		[SerializeField] private Color m_ShatterTint = Color.white;
-		[SerializeField] private float m_ServerDestroyDelay = 0.15f;
-		#endregion
+	#region Break Settings
+	[Header("Mesh Fracture Settings")]
+	[SerializeField, Range(6, 20)] private int m_FractureCount = 10;
+	[SerializeField] private float m_FractureExplosionForce = 3f;
+	[SerializeField] private float m_FractureExplosionRadius = 2f;
+	[SerializeField] private float m_FragmentLifetime = 5f;
+	[SerializeField] private float m_ServerDestroyDelay = 0.15f;
+	#endregion
 
         #region Properties
         public ItemData Data => m_ItemData;
@@ -326,80 +324,119 @@ namespace BarelyMoved.Items
 			}
         }
 
-		[Server]
-		private void ServerHandleBroken()
+	[Server]
+	private void ServerHandleBroken()
+	{
+		if (m_ProcessedBreak) return;
+		m_ProcessedBreak = true;
+
+		// Ensure it's not being carried anymore
+		if (m_IsGrabbed)
 		{
-			if (m_ProcessedBreak) return;
-			m_ProcessedBreak = true;
-
-			// Ensure it's not being carried anymore
-			if (m_IsGrabbed)
-			{
-				ForceDrop(m_Rigidbody.linearVelocity);
-			}
-
-			// Disable collisions and physics immediately to avoid further interactions
-			if (m_Colliders != null)
-			{
-				for (int i = 0; i < m_Colliders.Length; i++)
-				{
-					if (m_Colliders[i] != null) m_Colliders[i].enabled = false;
-				}
-			}
-			if (m_Rigidbody != null)
-			{
-				m_Rigidbody.isKinematic = true;
-			}
-
-			// Tell clients to play shatter and hide visuals
-			RpcPlayShatter(m_LastHitPoint == Vector3.zero ? transform.position : m_LastHitPoint,
-				m_LastHitNormal == Vector3.zero ? Vector3.up : m_LastHitNormal,
-				m_ShatterShards, m_ShatterSpeed, m_ShatterLifetime, m_ShatterTint);
-
-			// Destroy shortly after to keep scene clean
-			StartCoroutine(ServerDestroyAfter(m_ServerDestroyDelay));
+			ForceDrop(m_Rigidbody.linearVelocity);
 		}
 
-		private IEnumerator ServerDestroyAfter(float delay)
+		Vector3 impactPoint = m_LastHitPoint == Vector3.zero ? transform.position : m_LastHitPoint;
+		Vector3 currentVelocity = m_Rigidbody.linearVelocity;
+
+		// Tell all clients to fracture the mesh
+		RpcFractureMesh(impactPoint, currentVelocity);
+
+		// Destroy shortly after to keep scene clean
+		StartCoroutine(ServerDestroyAfter(m_ServerDestroyDelay));
+	}
+
+	private IEnumerator ServerDestroyAfter(float delay)
+	{
+		yield return new WaitForSeconds(delay);
+		if (isServer && netId != 0)
 		{
-			yield return new WaitForSeconds(delay);
-			if (isServer && netId != 0)
+			NetworkServer.Destroy(gameObject);
+		}
+	}
+
+	[ClientRpc]
+	private void RpcFractureMesh(Vector3 _impactPoint, Vector3 _currentVelocity)
+	{
+		// Hide the original object immediately
+		if (m_VisualRoot != null) m_VisualRoot.gameObject.SetActive(false);
+		
+		// Disable colliders to prevent further interaction
+		if (m_Colliders != null)
+		{
+			foreach (var col in m_Colliders)
 			{
-				NetworkServer.Destroy(gameObject);
+				if (col != null) col.enabled = false;
 			}
 		}
 
-		[ClientRpc]
-		private void RpcPlayShatter(Vector3 point, Vector3 normal, int shards, float speed, float lifetime, Color tint)
+		// Get the mesh to fracture
+		MeshFilter meshFilter = GetComponentInChildren<MeshFilter>();
+		if (meshFilter == null || meshFilter.sharedMesh == null)
 		{
-			// Hide intact visuals immediately
-			if (m_VisualRoot != null) m_VisualRoot.gameObject.SetActive(false);
-			if (m_Colliders != null)
-			{
-				for (int i = 0; i < m_Colliders.Length; i++)
-				{
-					if (m_Colliders[i] != null) m_Colliders[i].enabled = false;
-				}
-			}
-
-			// Spawn pooled shatter effect (client-only visual) via reflection
-			// to avoid hard dependency if VFX is stripped in builds.
-			if (s_ShatterSpawnMethod == null)
-			{
-				if (s_ShatterSpawnerType == null)
-				{
-					s_ShatterSpawnerType = System.Type.GetType("BarelyMoved.ShatterVFXSpawner, Assembly-CSharp");
-				}
-				if (s_ShatterSpawnerType != null)
-				{
-					s_ShatterSpawnMethod = s_ShatterSpawnerType.GetMethod("SpawnShatter", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-				}
-			}
-			if (s_ShatterSpawnMethod != null)
-			{
-				s_ShatterSpawnMethod.Invoke(null, new object[] { point, normal, shards, speed, lifetime, tint });
-			}
+			Debug.LogWarning($"[GrabbableItem] No mesh found on {gameObject.name} for fracturing!");
+			return;
 		}
+
+		Mesh originalMesh = meshFilter.sharedMesh;
+		
+		// Check if mesh is readable
+		if (!originalMesh.isReadable)
+		{
+			Debug.LogError($"[GrabbableItem] Mesh '{originalMesh.name}' is not readable! Enable Read/Write in import settings.");
+			return;
+		}
+
+		// Get the material (use material instance to avoid modifying shared material)
+		MeshRenderer meshRenderer = GetComponentInChildren<MeshRenderer>();
+		Material material = (meshRenderer != null && meshRenderer.sharedMaterial != null) 
+			? new Material(meshRenderer.sharedMaterial) 
+			: new Material(Shader.Find("Standard"));
+
+		// Calculate bounds in local space
+		Bounds localBounds = originalMesh.bounds;
+		Vector3 localImpactPoint = transform.InverseTransformPoint(_impactPoint);
+		
+		// Randomize piece count within range
+		int pieceCount = Random.Range(Mathf.Max(6, m_FractureCount - 2), m_FractureCount + 3);
+		
+		var fragments = MeshFracturer.FractureMesh(originalMesh, pieceCount, 
+			localImpactPoint, localBounds);
+
+		Debug.Log($"[GrabbableItem] Fractured {gameObject.name} into {fragments.Count} pieces");
+
+		// Spawn each fragment as a physics object
+		foreach (var fragmentMesh in fragments)
+		{
+			GameObject fragmentObj = new GameObject($"{gameObject.name}_Fragment");
+			fragmentObj.transform.position = transform.position;
+			fragmentObj.transform.rotation = transform.rotation;
+			fragmentObj.transform.localScale = transform.localScale;
+			fragmentObj.layer = gameObject.layer; // Inherit layer from parent
+
+			// Add components
+			MeshFilter filter = fragmentObj.AddComponent<MeshFilter>();
+			filter.mesh = fragmentMesh;
+			
+			MeshRenderer renderer = fragmentObj.AddComponent<MeshRenderer>();
+			renderer.material = material;
+			
+			Rigidbody rb = fragmentObj.AddComponent<Rigidbody>();
+			
+			MeshCollider collider = fragmentObj.AddComponent<MeshCollider>();
+			collider.convex = true;
+			
+			// Setup fractured piece component
+			FracturedPiece piece = fragmentObj.AddComponent<FracturedPiece>();
+			
+			// Calculate fragment velocity with some randomness
+			Vector3 fragmentVelocity = _currentVelocity + Random.insideUnitSphere * m_FractureExplosionForce;
+			piece.Initialize(fragmentMesh, material, fragmentVelocity, m_FragmentLifetime);
+			
+			// Apply explosive force from impact point
+			piece.ApplyExplosiveForce(_impactPoint, m_FractureExplosionForce, m_FractureExplosionRadius);
+		}
+	}
 
 		[ClientRpc]
 		protected void RpcShowDamageText(float _appliedDamage, float _severityRatio, Vector3 _worldPosition)
