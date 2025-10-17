@@ -123,7 +123,8 @@ namespace BarelyMoved.Player
 
             // Apply gravity
             if (!m_IsGrounded)
-            {
+            {   
+                m_InputHandler.ConsumeJumpInput();
                 m_Velocity.y += c_Gravity * Time.deltaTime;
             }
             else if (m_Velocity.y < 0)
