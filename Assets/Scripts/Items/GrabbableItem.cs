@@ -1,5 +1,7 @@
 using UnityEngine;
 using Mirror;
+using BarelyMoved;
+using System.Collections;
 
 namespace BarelyMoved.Items
 {
@@ -41,6 +43,11 @@ namespace BarelyMoved.Items
         #region Protected Fields
         protected Rigidbody m_Rigidbody;
         protected Collider[] m_Colliders;
+		private Vector3 m_LastHitPoint;
+		private Vector3 m_LastHitNormal;
+		private bool m_ProcessedBreak;
+		private static System.Type s_ShatterSpawnerType;
+		private static System.Reflection.MethodInfo s_ShatterSpawnMethod;
         #endregion
 
         #region SyncVars
@@ -54,6 +61,15 @@ namespace BarelyMoved.Items
 		[SerializeField, Range(0f, 1f)] private float m_DropOnImpactFraction = 0.5f; // drop if single-hit damage >= 50% of remaining value window
 		[SerializeField] private float m_CarriedDamageMultiplier = 1f; // damage multiplier while carried
 		[SerializeField] private float m_RecoilImpulseScale = 3f; // impulse applied to item on collision while carried
+		#endregion
+
+		#region Break VFX
+		[Header("Break VFX")]
+		[SerializeField] private int m_ShatterShards = 8;
+		[SerializeField] private float m_ShatterSpeed = 4f;
+		[SerializeField] private float m_ShatterLifetime = 1.0f;
+		[SerializeField] private Color m_ShatterTint = Color.white;
+		[SerializeField] private float m_ServerDestroyDelay = 0.15f;
 		#endregion
 
         #region Properties
@@ -231,16 +247,18 @@ namespace BarelyMoved.Items
             }
 
 			if (damage > 0f)
-            {
-                ApplyDamage(damage);
+			{
+				var contact = _collision.GetContact(0);
+				m_LastHitPoint = contact.point;
+				m_LastHitNormal = contact.normal;
+				float appliedDamage = ApplyDamage(damage);
 
-                // Optional: Spawn visual/audio feedback
-                OnDamageReceived(damage, _collision.GetContact(0).point);
+				// Optional: Spawn visual/audio feedback with actual applied damage
+				OnDamageReceived(appliedDamage, contact.point);
 
 				// Apply recoil impulse while carried
 				if (m_IsGrabbed)
 				{
-					var contact = _collision.GetContact(0);
 					Vector3 recoil = -contact.normal * m_RecoilImpulseScale * Mathf.Clamp(impactVelocity, 0f, 20f);
 					m_Rigidbody.AddForceAtPosition(recoil, contact.point, ForceMode.Impulse);
 				}
@@ -271,37 +289,124 @@ namespace BarelyMoved.Items
 		}
 		#endregion
 
-        [Server]
-        public void ApplyDamage(float _damage)
+		[Server]
+		public float ApplyDamage(float _damage)
         {
-            m_CurrentValue = Mathf.Max(m_ItemData.MinValue, m_CurrentValue - _damage);
+			float oldValue = m_CurrentValue;
+			m_CurrentValue = Mathf.Max(m_ItemData.MinValue, m_CurrentValue - _damage);
+			float applied = oldValue - m_CurrentValue;
             
-            Debug.Log($"[GrabbableItem] {gameObject.name} took {_damage} damage. Value: {m_CurrentValue}");
+			Debug.Log($"[GrabbableItem] {gameObject.name} took {applied} damage. Value: {m_CurrentValue}");
 
             if (IsBroken)
             {
                 OnItemBroken();
             }
+
+			return applied;
         }
 
-        protected virtual void OnDamageReceived(float _damage, Vector3 _hitPoint)
+		protected virtual void OnDamageReceived(float _damage, Vector3 _hitPoint)
         {
-            // Override in derived classes for VFX/SFX
+			// Client-side floating text (networked)
+			if (_damage > 0f)
+			{
+				float baseValue = (m_ItemData != null) ? Mathf.Max(1f, m_ItemData.BaseValue) : 1f;
+				float severity = Mathf.Clamp01(_damage / baseValue);
+				RpcShowDamageText(_damage, severity, _hitPoint);
+			}
         }
 
-        protected virtual void OnItemBroken()
+		protected virtual void OnItemBroken()
         {
             Debug.Log($"[GrabbableItem] {gameObject.name} is broken!");
-            
-            // Optional: Trigger broken state visuals
-            RpcOnItemBroken();
+			if (isServer)
+			{
+				ServerHandleBroken();
+			}
         }
 
-        [ClientRpc]
-        protected virtual void RpcOnItemBroken()
-        {
-            // Client-side broken state (VFX, SFX, etc.)
-        }
+		[Server]
+		private void ServerHandleBroken()
+		{
+			if (m_ProcessedBreak) return;
+			m_ProcessedBreak = true;
+
+			// Ensure it's not being carried anymore
+			if (m_IsGrabbed)
+			{
+				ForceDrop(m_Rigidbody.linearVelocity);
+			}
+
+			// Disable collisions and physics immediately to avoid further interactions
+			if (m_Colliders != null)
+			{
+				for (int i = 0; i < m_Colliders.Length; i++)
+				{
+					if (m_Colliders[i] != null) m_Colliders[i].enabled = false;
+				}
+			}
+			if (m_Rigidbody != null)
+			{
+				m_Rigidbody.isKinematic = true;
+			}
+
+			// Tell clients to play shatter and hide visuals
+			RpcPlayShatter(m_LastHitPoint == Vector3.zero ? transform.position : m_LastHitPoint,
+				m_LastHitNormal == Vector3.zero ? Vector3.up : m_LastHitNormal,
+				m_ShatterShards, m_ShatterSpeed, m_ShatterLifetime, m_ShatterTint);
+
+			// Destroy shortly after to keep scene clean
+			StartCoroutine(ServerDestroyAfter(m_ServerDestroyDelay));
+		}
+
+		private IEnumerator ServerDestroyAfter(float delay)
+		{
+			yield return new WaitForSeconds(delay);
+			if (isServer && netId != 0)
+			{
+				NetworkServer.Destroy(gameObject);
+			}
+		}
+
+		[ClientRpc]
+		private void RpcPlayShatter(Vector3 point, Vector3 normal, int shards, float speed, float lifetime, Color tint)
+		{
+			// Hide intact visuals immediately
+			if (m_VisualRoot != null) m_VisualRoot.gameObject.SetActive(false);
+			if (m_Colliders != null)
+			{
+				for (int i = 0; i < m_Colliders.Length; i++)
+				{
+					if (m_Colliders[i] != null) m_Colliders[i].enabled = false;
+				}
+			}
+
+			// Spawn pooled shatter effect (client-only visual) via reflection
+			// to avoid hard dependency if VFX is stripped in builds.
+			if (s_ShatterSpawnMethod == null)
+			{
+				if (s_ShatterSpawnerType == null)
+				{
+					s_ShatterSpawnerType = System.Type.GetType("BarelyMoved.ShatterVFXSpawner, Assembly-CSharp");
+				}
+				if (s_ShatterSpawnerType != null)
+				{
+					s_ShatterSpawnMethod = s_ShatterSpawnerType.GetMethod("SpawnShatter", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+				}
+			}
+			if (s_ShatterSpawnMethod != null)
+			{
+				s_ShatterSpawnMethod.Invoke(null, new object[] { point, normal, shards, speed, lifetime, tint });
+			}
+		}
+
+		[ClientRpc]
+		protected void RpcShowDamageText(float _appliedDamage, float _severityRatio, Vector3 _worldPosition)
+		{
+			// Spawn a floating damage text on clients
+			BarelyMoved.DamageTextSpawner.SpawnDamageText($"-{_appliedDamage:0}", _worldPosition, _severityRatio);
+		}
 
 		[ClientRpc]
 		protected void RpcOnReleased()

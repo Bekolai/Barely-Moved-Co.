@@ -31,11 +31,13 @@ namespace BarelyMoved.Player
         #endregion
 
         #region Private Fields
-        private PlayerInputHandler m_InputHandler;
+		private PlayerInputHandler m_InputHandler;
         private NetworkPlayerController m_PlayerController;
         
         private GrabbableItem m_CurrentlyHeldItem;
-        private GrabbableItem m_NearbyItem;
+		private GrabbableItem m_NearbyItem;
+		private float m_DefaultHoldDistance;
+		private float m_DefaultVerticalOffset = 0f;
 		private Dictionary<Collider, int> m_ItemColliderOriginalLayers = new Dictionary<Collider, int>();
         
         private Renderer m_HighlightedRenderer;
@@ -55,6 +57,9 @@ namespace BarelyMoved.Player
 
             if (m_GrabOrigin == null)
                 m_GrabOrigin = transform;
+
+			// Cache defaults so each grab starts from a clean baseline
+			m_DefaultHoldDistance = m_HoldDistance;
         }
 
 		private void Update()
@@ -402,6 +407,10 @@ namespace BarelyMoved.Player
 			m_CurrentlyHeldItem = itemIdentity.GetComponent<GrabbableItem>();
             ClearHighlight();
 
+			// Reset hold parameters on each grab to avoid carrying over buggy state
+			m_HoldDistance = m_DefaultHoldDistance;
+			m_CurrentVerticalOffset = m_DefaultVerticalOffset;
+
 			// Ignore collisions between player and held item locally
 			IgnorePlayerItemCollisions();
 
@@ -417,6 +426,9 @@ namespace BarelyMoved.Player
 			// Restore before clearing reference
 			RestorePlayerItemCollisions();
 			SetCarriedItemLayer(false);
+			// Reset parameters after any drop
+			m_HoldDistance = m_DefaultHoldDistance;
+			m_CurrentVerticalOffset = m_DefaultVerticalOffset;
 			m_CurrentlyHeldItem = null;
 			m_InputHandler.ConsumeGrabInput();
         }
@@ -430,6 +442,9 @@ namespace BarelyMoved.Player
 				// Item was dropped/broken server-side; clear local carry state
 				RestorePlayerItemCollisions();
 				SetCarriedItemLayer(false);
+				// Reset to defaults on forced drop as well
+				m_HoldDistance = m_DefaultHoldDistance;
+				m_CurrentVerticalOffset = m_DefaultVerticalOffset;
 				m_CurrentlyHeldItem = null;
 			}
 		}
