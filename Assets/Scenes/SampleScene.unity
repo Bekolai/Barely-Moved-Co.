@@ -1812,7 +1812,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BarelyMoved.DamageTextSpawner
   m_Prefab: {fileID: 7688384463997776778, guid: 5ce43da1249601f4aa7a2e68d3e786a6, type: 3}
   m_InitialPoolSize: 16
-  m_DefaultLifetime: 1.25
+  m_DefaultLifetime: 1.5
   m_DefaultFloatSpeed: 1.5
   m_SpawnJitterRadius: 0.05
   m_Font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
