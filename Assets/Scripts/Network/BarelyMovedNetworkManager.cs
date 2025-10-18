@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using BarelyMoved.GameManagement;
 using BarelyMoved.Player;
+using BarelyMoved.UI;
 
 namespace BarelyMoved.Network
 {
@@ -37,6 +38,10 @@ namespace BarelyMoved.Network
         private Dictionary<int, GameObject> m_ConnectedPlayers = new Dictionary<int, GameObject>();
         private int m_NextSpawnIndex = 0;
         private string m_CurrentSceneName;
+
+        // Disconnection tracking
+        public bool m_WasKicked = false;
+        
         #endregion
 
         #region Properties
@@ -184,23 +189,76 @@ namespace BarelyMoved.Network
             // Notify listeners (e.g., MainMenuManager) that client connected
             OnClientConnectedToServer?.Invoke();
         }
-
+        public bool isDisconnected = false;
         public override void OnClientDisconnect()
         {
             base.OnClientDisconnect();
 
             Debug.Log("[BarelyMovedNetworkManager] Disconnected from server.");
 
-            // Return to main menu when disconnected (kicked or connection lost)
+            // Show popup message when disconnected (kicked or connection lost)
             // Only if we're NOT the host (host can disconnect without leaving scene)
-            // Don't reload if already in MainMenu
             if (!NetworkServer.active)
             {
                 string currentScene = SceneManager.GetActiveScene().name;
                 if (currentScene != "MainMenu")
                 {
-                    Debug.Log("[BarelyMovedNetworkManager] Client disconnected - returning to main menu...");
+                    // Load MainMenu scene first so popup UI exists
+                    Debug.Log("[BarelyMovedNetworkManager] Loading MainMenu scene for popup display...");
                     SceneManager.LoadScene("MainMenu");
+                    isDisconnected = true;
+                    // Start coroutine to show popup after scene loads
+                   /*  StartCoroutine(ShowDisconnectionPopup()); */
+                }
+            }
+        }
+
+        private System.Collections.IEnumerator ShowDisconnectionPopup()
+        {
+            Debug.Log("[BarelyMovedNetworkManager] ShowDisconnectionPopup coroutine started");
+
+            // Wait longer for scene to load and UI to initialize
+            yield return new WaitForSeconds(1.0f);
+
+            Debug.Log($"[BarelyMovedNetworkManager] Checking for DisconnectionMessageUI.Instance: {DisconnectionMessageUI.Instance}");
+
+            // Show appropriate popup message
+            if (DisconnectionMessageUI.Instance != null)
+            {
+                if (m_WasKicked)
+                {
+                    Debug.Log("[BarelyMovedNetworkManager] Showing kicked message");
+                    DisconnectionMessageUI.Instance.ShowKickedMessage();
+                    m_WasKicked = false; // Reset flag
+                }
+                else
+                {
+                    Debug.Log("[BarelyMovedNetworkManager] Showing connection lost message");
+                    DisconnectionMessageUI.Instance.ShowConnectionLostMessage();
+                }
+                Debug.Log("[BarelyMovedNetworkManager] Showing disconnection popup message");
+            }
+            else
+            {
+                Debug.LogWarning("[BarelyMovedNetworkManager] DisconnectionMessageUI not found after scene load!");
+                // Try to find it manually
+                var uiInstance = FindFirstObjectByType<DisconnectionMessageUI>();
+                if (uiInstance != null)
+                {
+                    Debug.Log("[BarelyMovedNetworkManager] Found DisconnectionMessageUI manually, showing message");
+                    if (m_WasKicked)
+                    {
+                        uiInstance.ShowKickedMessage();
+                        m_WasKicked = false;
+                    }
+                    else
+                    {
+                        uiInstance.ShowConnectionLostMessage();
+                    }
+                }
+                else
+                {
+                    Debug.LogError("[BarelyMovedNetworkManager] DisconnectionMessageUI not found anywhere!");
                 }
             }
         }
@@ -291,6 +349,9 @@ namespace BarelyMoved.Network
             }
 
             Debug.Log($"[BarelyMovedNetworkManager] Kicking player with connection ID {_conn.connectionId}");
+
+            // Mark that this client was kicked (for popup message)
+            m_WasKicked = true;
 
             // Disconnect the client - Mirror will handle cleanup automatically
             _conn.Disconnect();

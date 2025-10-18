@@ -409,6 +409,14 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 9181494078082988720, guid: f7d840499c6813443a21b70ca00eef03, type: 3}
+      propertyPath: m_fontAsset
+      value: 
+      objectReference: {fileID: 11400000, guid: ab8935eb49cdb5b4f9402b0349a46f22, type: 2}
+    - target: {fileID: 9181494078082988720, guid: f7d840499c6813443a21b70ca00eef03, type: 3}
+      propertyPath: m_hasFontAssetChanged
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -417,6 +425,33 @@ PrefabInstance:
 --- !u!224 &121370123 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 1454112667614423162, guid: f7d840499c6813443a21b70ca00eef03, type: 3}
+  m_PrefabInstance: {fileID: 121370122}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &121370124 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7478483248151659537, guid: f7d840499c6813443a21b70ca00eef03, type: 3}
+  m_PrefabInstance: {fileID: 121370122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &121370125 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9181494078082988720, guid: f7d840499c6813443a21b70ca00eef03, type: 3}
+  m_PrefabInstance: {fileID: 121370122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
+--- !u!1 &121370127 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1454112667614423163, guid: f7d840499c6813443a21b70ca00eef03, type: 3}
   m_PrefabInstance: {fileID: 121370122}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &138497810
@@ -2737,6 +2772,8 @@ MonoBehaviour:
   m_SpawnPlayersInMainMenu: 0
   m_AutoCreatePlayerInPrep: 1
   m_ConnectionTrackerPrefab: {fileID: 0}
+  m_WasKicked: 0
+  isDisconnected: 0
 --- !u!4 &897256862
 Transform:
   m_ObjectHideFlags: 0
@@ -5919,6 +5956,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1832236623}
+  - component: {fileID: 1832236624}
   m_Layer: 0
   m_Name: PopUPPanel
   m_TagString: Untagged
@@ -5941,6 +5979,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1832236624
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1832236621}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bc63c27467bf614fa735d21484db57d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BarelyMoved.UI.DisconnectionMessageUI
+  m_MessagePanel: {fileID: 121370127}
+  m_MessageText: {fileID: 121370125}
+  m_OkButton: {fileID: 121370124}
+  m_KickedMessage: You have been kicked from the game.
+  m_ConnectionLostMessage: Connection to server lost.
 --- !u!1 &1891229396
 GameObject:
   m_ObjectHideFlags: 0
