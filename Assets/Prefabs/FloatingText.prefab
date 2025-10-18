@@ -66,10 +66,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: New Text
+  m_text: -100
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 1ebfacee75b3b5843b849300a2308a85, type: 2}
+  m_sharedMaterial: {fileID: 5782189148834768776, guid: 1ebfacee75b3b5843b849300a2308a85, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -157,8 +157,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
-      time: 0
-      value: 0
+      time: -0.04583435
+      value: 0.2380958
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -237,9 +237,9 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   m_UseOutline: 1
-  m_OutlineWidth: 0.2
+  m_OutlineWidth: 0.1
   m_OutlineColor: {r: 0, g: 0, b: 0, a: 1}
-  m_UseGlow: 1
+  m_UseGlow: 0
   m_GlowColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   m_GlowPower: 1
   m_UseCurvedMovement: 1

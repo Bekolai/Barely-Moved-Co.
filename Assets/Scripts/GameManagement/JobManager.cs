@@ -20,11 +20,15 @@ namespace BarelyMoved.GameManagement
 
         #region Serialized Fields
         [Header("Job Settings")]
+        [SerializeField] private bool m_UseTimer = true; // Toggle timer on/off
         [SerializeField] private float m_JobTimeLimit = 600f; // 10 minutes
         [SerializeField] private DeliveryZone m_DeliveryZone;
 
         [Header("Items")]
         [SerializeField] private List<GrabbableItem> m_RequiredItems = new List<GrabbableItem>();
+
+        [Header("Level Completion")]
+        [SerializeField] private bool m_RequireManualFinish = false; // Requires interaction with finish zone
         #endregion
 
         #region SyncVars
@@ -40,6 +44,8 @@ namespace BarelyMoved.GameManagement
         public int ItemsDelivered => m_DeliveryZone != null ? m_DeliveryZone.DeliveredItemCount : 0;
         public float CompletionPercentage => m_DeliveryZone != null ? m_DeliveryZone.GetCompletionPercentage(TotalItemsRequired) : 0f;
         public float FinalScore => m_FinalScore;
+        public bool UseTimer => m_UseTimer;
+        public bool RequiresManualFinish => m_RequireManualFinish;
         #endregion
 
         #region Events
@@ -102,6 +108,21 @@ namespace BarelyMoved.GameManagement
             RpcOnJobCompleted(m_FinalScore);
         }
 
+        /// <summary>
+        /// Manually complete the job (called by finish zone)
+        /// </summary>
+        [Server]
+        public void ManualCompleteJob()
+        {
+            if (!m_JobActive)
+            {
+                Debug.LogWarning("[JobManager] Cannot complete job - not active!");
+                return;
+            }
+
+            CompleteJob();
+        }
+
         [Server]
         private void FailJob()
         {
@@ -116,17 +137,21 @@ namespace BarelyMoved.GameManagement
         #region Timer
         private void UpdateTimer()
         {
-            m_TimeRemaining -= Time.deltaTime;
-
-            if (m_TimeRemaining <= 0f)
+            // Only update timer if enabled
+            if (m_UseTimer)
             {
-                m_TimeRemaining = 0f;
-                FailJob();
-                return;
+                m_TimeRemaining -= Time.deltaTime;
+
+                if (m_TimeRemaining <= 0f)
+                {
+                    m_TimeRemaining = 0f;
+                    FailJob();
+                    return;
+                }
             }
 
-            // Check completion
-            if (ItemsDelivered >= TotalItemsRequired)
+            // Check completion only if not requiring manual finish
+            if (!m_RequireManualFinish && ItemsDelivered >= TotalItemsRequired)
             {
                 CompleteJob();
             }

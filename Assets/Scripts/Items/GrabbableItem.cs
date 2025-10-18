@@ -295,9 +295,10 @@ namespace BarelyMoved.Items
 			float applied = oldValue - m_CurrentValue;
             
 			Debug.Log($"[GrabbableItem] {gameObject.name} took {applied} damage. Value: {m_CurrentValue}");
-
+			VFXPool.Instance?.Play(VFXType.Hit, transform.position, transform.rotation, transform.localScale);
             if (IsBroken)
             {
+				VFXPool.Instance?.Play(VFXType.Destroy, transform.position, transform.rotation, transform.localScale*1.5f);
                 OnItemBroken();
             }
 
@@ -318,6 +319,7 @@ namespace BarelyMoved.Items
 		protected virtual void OnItemBroken()
         {
             Debug.Log($"[GrabbableItem] {gameObject.name} is broken!");
+
 			if (isServer)
 			{
 				ServerHandleBroken();

@@ -71,22 +71,32 @@ namespace BarelyMoved.UI
                     return;
             }
 
-            // Timer
+            // Timer (only show if level uses timer)
             if (m_TimerText != null)
             {
-                float time = m_JobManager.TimeRemaining;
-                int minutes = Mathf.FloorToInt(time / 60f);
-                int seconds = Mathf.FloorToInt(time % 60f);
-                m_TimerText.text = $"{minutes:00}:{seconds:00}";
-                
-                // Change color if running out of time
-                if (time < 60f)
+                if (m_JobManager.UseTimer)
                 {
-                    m_TimerText.color = Color.red;
+                    float time = m_JobManager.TimeRemaining;
+                    int minutes = Mathf.FloorToInt(time / 60f);
+                    int seconds = Mathf.FloorToInt(time % 60f);
+                    m_TimerText.text = $"{minutes:00}:{seconds:00}";
+                    
+                    // Change color if running out of time
+                    if (time < 60f)
+                    {
+                        m_TimerText.color = Color.red;
+                    }
+                    else
+                    {
+                        m_TimerText.color = Color.white;
+                    }
+                    m_TimerText.gameObject.SetActive(true);
                 }
                 else
                 {
+                    m_TimerText.text = "NO TIME LIMIT";
                     m_TimerText.color = Color.white;
+                    m_TimerText.gameObject.SetActive(true);
                 }
             }
 

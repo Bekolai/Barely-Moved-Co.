@@ -19,6 +19,7 @@ namespace BarelyMoved.Player
         private InputAction m_SprintAction;
         private InputAction m_GrabAction;
         private InputAction m_ThrowAction;
+        private InputAction m_InteractAction;
         #endregion
 
         #region Properties
@@ -80,6 +81,7 @@ namespace BarelyMoved.Player
             m_SprintAction = actionMap.FindAction("Sprint");
             m_GrabAction = actionMap.FindAction("Grab");
             m_ThrowAction = actionMap.FindAction("Throw");
+            m_InteractAction = actionMap.FindAction("Interact");
 
             // Check if required actions were found
             if (m_MoveAction == null) Debug.LogWarning("[PlayerInputHandler] Move action not found!");
@@ -88,6 +90,7 @@ namespace BarelyMoved.Player
             if (m_SprintAction == null) Debug.LogWarning("[PlayerInputHandler] Sprint action not found!");
             if (m_GrabAction == null) Debug.LogWarning("[PlayerInputHandler] Grab action not found!");
             if (m_ThrowAction == null) Debug.LogWarning("[PlayerInputHandler] Throw action not found!");
+            if (m_InteractAction == null) Debug.LogWarning("[PlayerInputHandler] Interact action not found!");
 
             // Subscribe to input events
             if (m_JumpAction != null)
@@ -98,6 +101,9 @@ namespace BarelyMoved.Player
             
             if (m_GrabAction != null)
                 m_GrabAction.performed += OnGrabPerformed;
+            
+            if (m_InteractAction != null)
+                m_InteractAction.performed += OnInteractPerformed;
         }
 
         private void Update()
@@ -145,6 +151,12 @@ namespace BarelyMoved.Player
             if (!isLocalPlayer) return;
             IsThrowPressed = true;
         }
+
+        private void OnInteractPerformed(InputAction.CallbackContext _context)
+        {
+            if (!isLocalPlayer) return;
+            IsInteractPressed = true;
+        }
         #endregion
 
         #region Public Methods
@@ -170,6 +182,14 @@ namespace BarelyMoved.Player
         public void ConsumeThrowInput()
         {
             IsThrowPressed = false;
+        }
+
+        /// <summary>
+        /// Consume interact input (call after processing)
+        /// </summary>
+        public void ConsumeInteractInput()
+        {
+            IsInteractPressed = false;
         }
 
         /// <summary>

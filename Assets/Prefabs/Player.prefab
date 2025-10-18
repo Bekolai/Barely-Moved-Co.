@@ -111,6 +111,8 @@ GameObject:
   - component: {fileID: 5368269072882543697}
   - component: {fileID: 4645415387848256785}
   - component: {fileID: 2946379610933732064}
+  - component: {fileID: 6533348613305467259}
+  - component: {fileID: 1507637399993885433}
   m_Layer: 9
   m_Name: Player
   m_TagString: Untagged
@@ -334,6 +336,43 @@ MonoBehaviour:
   m_GamepadSensitivity: 10
   m_MinVerticalAngle: -60
   m_MaxVerticalAngle: 60
+--- !u!114 &6533348613305467259
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2716976413533800194}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e04791f7d4d4c34c8a77fe9535df936, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BarelyMoved.Player.PlayerInteractionSystem
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  m_InteractionRange: 0.2
+  m_InteractableLayer:
+    serializedVersion: 2
+    m_Bits: 1024
+  m_InteractionOrigin: {fileID: 2073208550486871840}
+  m_InteractionPromptUI: {fileID: 0}
+--- !u!114 &1507637399993885433
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2716976413533800194}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8866ff959013bc4482cb4cdb827311d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BarelyMoved.Player.NetworkPlayerData
+  syncDirection: 0
+  syncMode: 0
+  syncInterval: 0
+  m_DefaultPlayerName: Player
 --- !u!1 &4593425169806952779
 GameObject:
   m_ObjectHideFlags: 0

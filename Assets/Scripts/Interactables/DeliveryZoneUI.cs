@@ -1,4 +1,6 @@
 using UnityEngine;
+using TMPro;
+using BarelyMoved.GameManagement;
 using Mirror;
 
 namespace BarelyMoved.Interactables
